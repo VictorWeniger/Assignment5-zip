@@ -1,0 +1,42 @@
+@startuml
+class ProtocolDocument
+class ProtocolSession
+class Speech
+class Deputy
+class SpeechVideo
+class Comment
+class ExportTemplate
+
+class MongoDatabaseHandler<T>
+class ProtocolImportService
+class XmlProtocolParser
+class NlpProcessingService
+class DuuiNlpEngine
+class DuuiComposerNlpEngine
+class UimaCasSerializer
+class TeXSpeechExporter
+class TeXPdfCompiler
+class ExportController
+class ProtocolController
+class NlpController
+class FrontendController
+class TemplateController
+
+ProtocolSession "1" o-- "*" Speech
+Speech "1" o-- "*" Comment
+Speech "1" --> "1" Deputy
+Speech "0..1" --> "0..1" SpeechVideo
+Speech --> UimaCasSerializer
+
+ProtocolImportService --> XmlProtocolParser
+ProtocolImportService --> MongoDatabaseHandler
+NlpProcessingService --> DuuiNlpEngine
+NlpProcessingService --> DuuiComposerNlpEngine
+NlpProcessingService --> UimaCasSerializer
+ProtocolController --> MongoDatabaseHandler
+ExportController --> TeXSpeechExporter
+ExportController --> TeXPdfCompiler
+NlpController --> NlpProcessingService
+TemplateController --> MongoDatabaseHandler
+FrontendController --> ProtocolController
+@enduml

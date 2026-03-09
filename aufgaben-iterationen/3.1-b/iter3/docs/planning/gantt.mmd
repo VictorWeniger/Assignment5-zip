@@ -1,0 +1,35 @@
+gantt
+    title Multimodal Parliament Explorer Timeline
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d.%m.
+    excludes weekends
+
+    section Planning
+    Repo setup + milestones (Member A):done, p1, 2026-02-21, 2d
+    Gantt/UML/mockups (Member D)      :done, p2, 2026-02-23, 6d
+    milestone Planning complete       :milestone, m1, 2026-03-01, 0d
+
+    section Backend
+    Import + parser pipeline (A/B)    :done, b1, 2026-02-24, 10d
+    REST API + validation + docs (B)  :done, b2, 2026-03-01, 8d
+    Media enrichment (A)              :done, b3, 2026-03-05, 8d
+    milestone Backend feature freeze  :milestone, m2, 2026-03-14, 0d
+
+    section NLP
+    DUUI endpoint integration (C)     :done, n1, 2026-03-06, 7d
+    Local fallback + UIMA-like CAS (C):done, n2, 2026-03-10, 6d
+    WhisperX/remote full pipeline (C) :active, n3, 2026-03-15, 5d
+
+    section Frontend
+    FreeMarker scaffold + pages (D)   :done, f1, 2026-03-07, 8d
+    D3 visualizations refinement (D)  :done, f2, 2026-03-10, 8d
+    NLP interaction polish (D)        :active, f3, 2026-03-16, 4d
+
+    section Export
+    TeX/PDF export + templates (B/C)  :done, e1, 2026-03-12, 7d
+    TikZ/statistics options (B)       :done, e2, 2026-03-17, 3d
+
+    section Documentation + Demo
+    JavaDoc + manuals + report (All)  :active, d1, 2026-03-14, 7d
+    Final integration + presentation  :d2, 2026-03-18, 4d
+    milestone Submission deadline     :milestone, m3, 2026-03-22, 0d

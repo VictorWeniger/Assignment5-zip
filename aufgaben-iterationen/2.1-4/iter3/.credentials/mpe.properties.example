@@ -1,0 +1,12 @@
+mpe.nlp.engine=duui
+mpe.duui.endpoint=
+mpe.duui.token=
+mpe.duui.timeoutSeconds=30
+duui.mode=remote
+duui.workers=1
+duui.spacy.target=
+duui.gervader.target=
+duui.parlbert_topic.target=
+duui.spacy.param.language=de
+duui.param.selection=sentences
+duui.param.view=speech
