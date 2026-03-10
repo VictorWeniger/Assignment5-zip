@@ -7,6 +7,8 @@ package org.example.service;
 import org.example.model.ImageMetadata;
 import org.example.model.SpeechVideo;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -37,13 +39,14 @@ public class MediaAssetDownloadService {
      * Downloads one speech video when media downloading is enabled.
      */
     public void downloadSpeechVideo(SpeechVideo speechVideo) {
-        if (!enabled || speechVideo == null || isBlank(speechVideo.getSourceUrl())) {
+        String mediaUrl = resolveSpeechVideoDownloadUrl(speechVideo);
+        if (!enabled || speechVideo == null || isBlank(mediaUrl)) {
             return;
         }
 
-        String extension = extensionFromUrl(speechVideo.getSourceUrl(), ".mp4");
+        String extension = extensionFromUrl(mediaUrl, ".mp4");
         Path destination = basePath.resolve("videos").resolve(speechVideo.getId() + extension);
-        if (download(speechVideo.getSourceUrl(), destination)) {
+        if (download(mediaUrl, destination)) {
             speechVideo.setLocalPath(destination.toString());
         }
     }
@@ -76,6 +79,41 @@ public class MediaAssetDownloadService {
         Path destination = basePath.resolve("images").resolve(deputyId + extension);
         if (download(imageMetadata.getSourceUrl(), destination)) {
             imageMetadata.setLocalPath(destination.toString());
+            updateStoredImageDimensions(imageMetadata, destination);
+        }
+    }
+
+    private String resolveSpeechVideoDownloadUrl(SpeechVideo speechVideo) {
+        if (speechVideo == null) {
+            return null;
+        }
+        if (isDirectMediaUrl(speechVideo.getStreamUrl())) {
+            return speechVideo.getStreamUrl();
+        }
+        if (isDirectMediaUrl(speechVideo.getSourceUrl())) {
+            return speechVideo.getSourceUrl();
+        }
+        return null;
+    }
+
+    private boolean isDirectMediaUrl(String value) {
+        if (isBlank(value)) {
+            return false;
+        }
+        String lower = value.toLowerCase();
+        return lower.contains(".mp4") || lower.contains(".m3u8");
+    }
+
+    private void updateStoredImageDimensions(ImageMetadata imageMetadata, Path destination) {
+        try (InputStream input = Files.newInputStream(destination)) {
+            BufferedImage image = ImageIO.read(input);
+            if (image == null) {
+                return;
+            }
+            imageMetadata.setWidth(image.getWidth());
+            imageMetadata.setHeight(image.getHeight());
+        } catch (IOException ignored) {
+            // Keep best-effort metadata extraction silent during import.
         }
     }
 

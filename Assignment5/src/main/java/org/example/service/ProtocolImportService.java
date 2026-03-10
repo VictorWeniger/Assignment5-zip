@@ -7,6 +7,7 @@ package org.example.service;
 import org.example.db.DatabaseHandler;
 import org.example.model.Deputy;
 import org.example.model.ImageMetadata;
+import org.example.model.ParliamentaryGroup;
 import org.example.model.ProtocolDocument;
 import org.example.model.ProtocolSession;
 import org.example.model.Speech;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -39,6 +41,8 @@ public class ProtocolImportService {
     private final DatabaseHandler<SpeechVideo> speechVideoDatabase;
     private final DeputyImageEnrichmentService deputyImageEnrichmentService;
     private final MediaAssetDownloadService mediaAssetDownloadService;
+    private final DeputyMasterDataImportService deputyMasterDataImportService;
+    private final AgendaVideoImportService agendaVideoImportService;
     private final XmlProtocolParser parser;
     private final AtomicBoolean importRunning = new AtomicBoolean(false);
 
@@ -54,6 +58,8 @@ public class ProtocolImportService {
             DatabaseHandler<SpeechVideo> speechVideoDatabase,
             DeputyImageEnrichmentService deputyImageEnrichmentService,
             MediaAssetDownloadService mediaAssetDownloadService,
+            DeputyMasterDataImportService deputyMasterDataImportService,
+            AgendaVideoImportService agendaVideoImportService,
             XmlProtocolParser parser
     ) {
         this.downloader = downloader;
@@ -64,6 +70,8 @@ public class ProtocolImportService {
         this.speechVideoDatabase = speechVideoDatabase;
         this.deputyImageEnrichmentService = deputyImageEnrichmentService;
         this.mediaAssetDownloadService = mediaAssetDownloadService;
+        this.deputyMasterDataImportService = deputyMasterDataImportService;
+        this.agendaVideoImportService = agendaVideoImportService;
         this.parser = parser;
     }
 
@@ -203,6 +211,7 @@ public class ProtocolImportService {
         int skippedInvalidSpeeches = 0;
         int skippedInvalidDeputies = 0;
         int skippedInvalidVideos = 0;
+        Set<Integer> importedDeputyPeriods = new LinkedHashSet<>();
 
         for (String xmlLink : xmlLinks) {
             ProtocolIdParser.ParsedProtocolId parsedId;
@@ -216,6 +225,23 @@ public class ProtocolImportService {
             boolean exists = protocolDatabase.count("protocols", new Document("id", parsedId.protocolId())) > 0;
             if (exists && !options.forceReimportExisting()) {
                 continue;
+            }
+
+            if (importedDeputyPeriods.add(parsedId.legislativePeriod())) {
+                DeputyMasterDataImportService.ImportResult deputyImportResult =
+                        deputyMasterDataImportService.importLegislativePeriod(
+                                parsedId.legislativePeriod(),
+                                deputyDatabase,
+                                deputyImageEnrichmentService,
+                                mediaAssetDownloadService
+                        );
+                LOGGER.info(
+                        "Imported deputy master data for legislative period {} (matched={}, upserted={}, imageAttempts={})",
+                        deputyImportResult.legislativePeriod(),
+                        deputyImportResult.matchedDeputies(),
+                        deputyImportResult.upsertedDeputies(),
+                        deputyImportResult.imageAttempts()
+                );
             }
 
             String xml;
@@ -240,7 +266,11 @@ public class ProtocolImportService {
                     parsedId.legislativePeriod(),
                     xml
             );
-            ValidationResult validationResult = validateParsedProtocol(parsedProtocol, parsedId.protocolId());
+            ValidationResult validationResult = validateParsedProtocol(
+                    parsedProtocol,
+                    parsedId.protocolId(),
+                    parsedId.legislativePeriod()
+            );
 
             sessionDatabase.replaceById("sessions", validationResult.session().getId(), validationResult.session());
             upsertedSessions++;
@@ -268,6 +298,7 @@ public class ProtocolImportService {
                 speechVideoDatabase.replaceById("speech_videos", speechVideo.getId(), speechVideo);
                 upsertedVideos++;
             }
+            upsertedVideos += backfillMissingSpeechVideos(validationResult.speeches());
             skippedInvalidVideos += validationResult.invalidVideoCount();
         }
 
@@ -284,7 +315,11 @@ public class ProtocolImportService {
         );
     }
 
-    private ValidationResult validateParsedProtocol(XmlProtocolParser.ParsedProtocol parsedProtocol, String protocolId) {
+    private ValidationResult validateParsedProtocol(
+            XmlProtocolParser.ParsedProtocol parsedProtocol,
+            String protocolId,
+            int legislativePeriod
+    ) {
         ProtocolSession session = parsedProtocol.session();
         if (session.getId() == null || session.getId().isBlank()) {
             session.setId("session-" + protocolId);
@@ -305,12 +340,14 @@ public class ProtocolImportService {
                     if (speech.getText() == null) {
                         speech.setText("");
                     }
+                    speech.setSpeaker(resolveDeputyProfile(speech.getSpeaker(), legislativePeriod));
                 })
                 .collect(Collectors.toList());
         int invalidSpeechCount = parsedProtocol.speeches().size() - validSpeeches.size();
 
         List<Deputy> validDeputies = parsedProtocol.deputies().stream()
                 .filter(deputy -> deputy != null && deputy.getId() != null && !deputy.getId().isBlank())
+                .map(deputy -> resolveDeputyProfile(deputy, legislativePeriod))
                 .collect(Collectors.toList());
         int invalidDeputyCount = parsedProtocol.deputies().size() - validDeputies.size();
 
@@ -338,6 +375,105 @@ public class ProtocolImportService {
                 invalidDeputyCount,
                 invalidVideoCount
         );
+    }
+
+    private Deputy resolveDeputyProfile(Deputy parsedDeputy, int legislativePeriod) {
+        if (parsedDeputy == null || parsedDeputy.getId() == null || parsedDeputy.getId().isBlank()) {
+            return parsedDeputy;
+        }
+        Deputy stored = deputyDatabase.findById("deputies", parsedDeputy.getId(), Deputy.class).orElse(null);
+        if (stored == null) {
+            return parsedDeputy;
+        }
+        return mergeDeputies(stored, parsedDeputy, legislativePeriod);
+    }
+
+    private Deputy mergeDeputies(Deputy baseDeputy, Deputy overlayDeputy, int legislativePeriod) {
+        Deputy merged = new Deputy();
+        merged.setId(firstNonBlank(overlayDeputy.getId(), baseDeputy.getId()));
+        merged.setFirstName(firstNonBlank(baseDeputy.getFirstName(), overlayDeputy.getFirstName()));
+        merged.setLastName(firstNonBlank(baseDeputy.getLastName(), overlayDeputy.getLastName()));
+        merged.setTitle(firstNonBlank(baseDeputy.getTitle(), overlayDeputy.getTitle()));
+        merged.setBirthDate(baseDeputy.getBirthDate() != null ? baseDeputy.getBirthDate() : overlayDeputy.getBirthDate());
+        merged.setBirthPlace(firstNonBlank(baseDeputy.getBirthPlace(), overlayDeputy.getBirthPlace()));
+        merged.setBirthCountry(firstNonBlank(baseDeputy.getBirthCountry(), overlayDeputy.getBirthCountry()));
+        merged.setDeathDate(baseDeputy.getDeathDate() != null ? baseDeputy.getDeathDate() : overlayDeputy.getDeathDate());
+        merged.setGender(firstNonBlank(baseDeputy.getGender(), overlayDeputy.getGender()));
+        merged.setMaritalStatus(firstNonBlank(baseDeputy.getMaritalStatus(), overlayDeputy.getMaritalStatus()));
+        merged.setReligion(firstNonBlank(baseDeputy.getReligion(), overlayDeputy.getReligion()));
+        merged.setProfession(firstNonBlank(baseDeputy.getProfession(), overlayDeputy.getProfession()));
+        merged.setPartyShort(firstNonBlank(baseDeputy.getPartyShort(), overlayDeputy.getPartyShort()));
+        merged.setVitaShort(firstNonBlank(baseDeputy.getVitaShort(), overlayDeputy.getVitaShort()));
+        merged.setPublicationRequiredInfo(firstNonBlank(
+                baseDeputy.getPublicationRequiredInfo(),
+                overlayDeputy.getPublicationRequiredInfo()
+        ));
+        merged.setRole(overlayDeputy.getRole() != null ? overlayDeputy.getRole() : baseDeputy.getRole());
+        merged.setParliamentaryGroup(selectParliamentaryGroup(baseDeputy, overlayDeputy, legislativePeriod));
+        merged.getLegislativePeriods().addAll(baseDeputy.getLegislativePeriods());
+        for (var period : overlayDeputy.getLegislativePeriods()) {
+            boolean known = merged.getLegislativePeriods().stream()
+                    .anyMatch(existing -> existing != null
+                            && period != null
+                            && existing.getLegislativePeriod() == period.getLegislativePeriod());
+            if (!known) {
+                merged.getLegislativePeriods().add(period);
+            }
+        }
+        if (merged.getImages().isEmpty()) {
+            merged.getImages().addAll(baseDeputy.getImages());
+        }
+        if (merged.getImages().isEmpty()) {
+            merged.getImages().addAll(overlayDeputy.getImages());
+        }
+        return merged;
+    }
+
+    private ParliamentaryGroup selectParliamentaryGroup(Deputy baseDeputy, Deputy overlayDeputy, int legislativePeriod) {
+        if (baseDeputy.getParliamentaryGroup() != null) {
+            boolean periodKnown = baseDeputy.getLegislativePeriods().stream()
+                    .anyMatch(period -> period != null && period.getLegislativePeriod() == legislativePeriod);
+            if (periodKnown) {
+                return baseDeputy.getParliamentaryGroup();
+            }
+        }
+        return overlayDeputy.getParliamentaryGroup() != null
+                ? overlayDeputy.getParliamentaryGroup()
+                : baseDeputy.getParliamentaryGroup();
+    }
+
+    private int backfillMissingSpeechVideos(List<Speech> speeches) {
+        int upserted = 0;
+        for (Speech speech : speeches) {
+            if (speech == null || speech.getId() == null || speech.getId().isBlank()) {
+                continue;
+            }
+            boolean alreadyStored = speechVideoDatabase.findById("speech_videos", "video-" + speech.getId(), SpeechVideo.class).isPresent();
+            if (alreadyStored) {
+                continue;
+            }
+            try {
+                agendaVideoImportService.importVideosForSpeech(speech.getId());
+                SpeechVideo imported = speechVideoDatabase.findById("speech_videos", "video-" + speech.getId(), SpeechVideo.class)
+                        .orElse(null);
+                if (imported == null) {
+                    continue;
+                }
+                mediaAssetDownloadService.downloadSpeechVideo(imported);
+                speechVideoDatabase.replaceById("speech_videos", imported.getId(), imported);
+                upserted++;
+            } catch (IllegalArgumentException ignored) {
+                // Not every speech can be resolved automatically from Bundestag clip navigation.
+            }
+        }
+        return upserted;
+    }
+
+    private String firstNonBlank(String primary, String fallback) {
+        if (primary != null && !primary.isBlank()) {
+            return primary;
+        }
+        return fallback;
     }
 
     private List<String> filterLinks(List<String> xmlLinks, ImportOptions options) {

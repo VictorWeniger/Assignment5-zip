@@ -26,3 +26,5 @@ Vergleich: `2d` -> `2e`
 - - / -: `src/main/java/org/example/.DS_Store => /dev/null`
 - 101 / 0: `/dev/null => aufgaben-staende/2e/src/main/java/org/example/model/ImageMetadata.java`
 - 365 / 0: `/dev/null => aufgaben-staende/2e/src/main/java/org/example/service/DeputyImageEnrichmentService.java`
+
+2026-03-10 Sync Note: Updated this documented state to include full Bundestag deputy master-data import for legislative periods, richer deputy metadata persistence, and the current deputy image enrichment behavior from Assignment5.

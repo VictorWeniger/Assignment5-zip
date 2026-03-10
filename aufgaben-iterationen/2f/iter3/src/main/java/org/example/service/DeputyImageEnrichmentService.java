@@ -48,6 +48,7 @@ public class DeputyImageEnrichmentService {
                         metadata.setSourceUrl(source);
                         metadata.setMimeType(inferMimeType(source));
                         metadata.setCopyrightNotice("Deutscher Bundestag");
+                        applyImageDimensions(metadata, searchHtml, source);
                         deputy.getImages().add(metadata);
                         return;
                     }
@@ -145,6 +146,27 @@ public class DeputyImageEnrichmentService {
         String detailHtml = get(detailUrl);
         Document detailDoc = Jsoup.parse(detailHtml, detailUrl);
         return resolveImageUrl(detailDoc);
+    }
+
+    private void applyImageDimensions(ImageMetadata metadata, String html, String sourceUrl) {
+        if (metadata == null || html == null || html.isBlank() || sourceUrl == null || sourceUrl.isBlank()) {
+            return;
+        }
+        try {
+            Document doc = Jsoup.parse(html);
+            for (Element img : doc.select("img[src], img[data-src], img[data-original], img[data-lazy-src]")) {
+                for (String candidate : candidateImageValues(img)) {
+                    if (!sourceUrl.equals(toHttps(candidate))) {
+                        continue;
+                    }
+                    metadata.setWidth(parseDimension(img.attr("width")));
+                    metadata.setHeight(parseDimension(img.attr("height")));
+                    return;
+                }
+            }
+        } catch (Exception ignored) {
+            // Keep enrichment best-effort only.
+        }
     }
 
     private String resolveImageUrl(Document doc) {
@@ -246,6 +268,17 @@ public class DeputyImageEnrichmentService {
                 + "&filterQuery%5Bereignis%5D%5B0%5D=" + portraitFilter
                 + "&sortVal=3");
         return urls;
+    }
+
+    private int parseDimension(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private String get(String url) throws IOException {
