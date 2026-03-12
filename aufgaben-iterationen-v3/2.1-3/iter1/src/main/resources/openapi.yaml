@@ -1,0 +1,578 @@
+openapi: 3.0.3
+info:
+  title: Multimodal Parliament Explorer API
+  version: 0.1.0
+  description: Backend API for protocol import, parliamentary data lookup, and media metadata.
+servers:
+  - url: http://localhost:7070
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: API is healthy
+  /api/import/run:
+    post:
+      summary: Run import for all missing protocol XML files
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: integer
+          description: Restrict import to one legislative period (e.g. 20).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 0
+            maximum: 500
+          description: Max number of protocols to process (0 means no limit).
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Re-import protocols even if already present.
+      responses:
+        '200':
+          description: Import summary
+        '400':
+          description: Invalid query parameter
+  /api/import/run/{protocolId}:
+    post:
+      summary: Import exactly one protocol by ID
+      parameters:
+        - name: protocolId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Import summary
+        '400':
+          description: Invalid path/query parameter
+  /api/import/preview:
+    get:
+      summary: Preview candidate protocols for import without writing to DB
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: integer
+          description: Restrict to one legislative period (e.g. 20).
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 0
+            maximum: 500
+          description: Max number of protocols to preview (0 means no limit).
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Included for parity with import-run options.
+      responses:
+        '200':
+          description: Import candidate list
+        '400':
+          description: Invalid query parameter
+  /api/nlp/run:
+    post:
+      summary: Run lightweight NLP annotation pass on speeches
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 300
+            maximum: 5000
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: NLP run summary
+        '400':
+          description: Invalid query parameter
+  /api/nlp/run/{speechId}:
+    post:
+      summary: Run lightweight NLP annotation for one speech
+      parameters:
+        - name: speechId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: NLP run summary
+        '400':
+          description: Invalid path/query parameter
+  /api/nlp/stats:
+    get:
+      summary: NLP processing coverage stats
+      responses:
+        '200':
+          description: NLP stats
+  /api/nlp/import:
+    post:
+      summary: Import professor-provided NLP annotations from UIMA XMI(.gz)
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Absolute or relative path to one `.xmi` / `.xmi.gz` file or a directory containing many such files
+        - name: createMissing
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Import summary
+        '400':
+          description: Invalid query parameter or file not readable
+  /api/protocols:
+    get:
+      summary: List protocols
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 1000
+        - name: includeRaw
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Protocol list
+        '400':
+          description: Invalid query parameter
+  /api/protocols/{id}:
+    get:
+      summary: Get protocol by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: includeRaw
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Protocol details
+        '400':
+          description: Invalid query parameter
+        '404':
+          description: Not found
+  /api/sessions:
+    get:
+      summary: List sessions
+      parameters:
+        - name: protocolId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Session list
+  /api/speeches:
+    get:
+      summary: List speeches
+      parameters:
+        - name: protocolId
+          in: query
+          schema:
+            type: string
+        - name: protocolIds
+          in: query
+          schema:
+            type: string
+            description: Comma separated protocol IDs (e.g. 20-42,20-43)
+        - name: sessionId
+          in: query
+          schema:
+            type: string
+        - name: agendaItem
+          in: query
+          schema:
+            type: integer
+        - name: speakerId
+          in: query
+          schema:
+            type: string
+        - name: faction
+          in: query
+          schema:
+            type: string
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: matchMode
+          in: query
+          schema:
+            type: string
+            enum: [and, or]
+            default: and
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Speech list
+        '400':
+          description: Invalid query parameter
+  /api/speeches/search:
+    get:
+      summary: Case-insensitive fulltext search in speech text
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Matching speeches
+        '400':
+          description: Missing/invalid query parameter
+  /api/speeches/{id}:
+    get:
+      summary: Get speech by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Speech details
+        '404':
+          description: Not found
+  /api/speeches/{id}/detail:
+    get:
+      summary: Get speech including speaker and related video metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Combined detail payload
+        '404':
+          description: Not found
+  /api/deputies:
+    get:
+      summary: List deputies
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: Deputy list
+        '400':
+          description: Invalid query parameter
+  /api/deputies/{id}:
+    get:
+      summary: Get deputy by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deputy details
+        '404':
+          description: Not found
+  /api/videos:
+    get:
+      summary: List speech videos
+      parameters:
+        - name: speechId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: Video list
+        '400':
+          description: Invalid query parameter
+  /api/videos/{id}:
+    get:
+      summary: Get video by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Video details
+        '404':
+          description: Not found
+  /api/topics:
+    get:
+      summary: Aggregate available topic labels from speech NLP annotations
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Topic list with counts
+        '400':
+          description: Invalid query parameter
+  /api/export/tex:
+    get:
+      summary: Export matching speeches as LaTeX source text
+      parameters:
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: protocolId
+          in: query
+          schema:
+            type: string
+        - name: protocolIds
+          in: query
+          schema:
+            type: string
+            description: Comma separated protocol IDs
+        - name: speakerId
+          in: query
+          schema:
+            type: string
+        - name: faction
+          in: query
+          schema:
+            type: string
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: matchMode
+          in: query
+          schema:
+            type: string
+            enum: [and, or]
+            default: and
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [protocol, speaker, faction, topic, none]
+            default: protocol
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: includeTikz
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: TeX source
+        '400':
+          description: Invalid query parameter
+  /api/export/pdf:
+    get:
+      summary: Export matching speeches as compiled PDF (requires local pdflatex)
+      parameters:
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: protocolId
+          in: query
+          schema:
+            type: string
+        - name: protocolIds
+          in: query
+          schema:
+            type: string
+            description: Comma separated protocol IDs
+        - name: speakerId
+          in: query
+          schema:
+            type: string
+        - name: faction
+          in: query
+          schema:
+            type: string
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: matchMode
+          in: query
+          schema:
+            type: string
+            enum: [and, or]
+            default: and
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [protocol, speaker, faction, topic, none]
+            default: protocol
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: includeTikz
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: PDF document
+        '400':
+          description: Invalid query parameter
+        '501':
+          description: pdflatex unavailable or compilation failed
+  /api/templates:
+    get:
+      summary: List editable export templates
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: Template list
+  /api/templates/{id}:
+    get:
+      summary: Get template by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+        '404':
+          description: Not found
+    put:
+      summary: Upsert template by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+      responses:
+        '200':
+          description: Updated template
+        '400':
+          description: Invalid payload
+  /api/templates/seed:
+    post:
+      summary: Seed default template snippets
+      responses:
+        '200':
+          description: Seed completed
+  /api/stats:
+    get:
+      summary: Collection-level counts for quick sanity checks
+      responses:
+        '200':
+          description: Count summary

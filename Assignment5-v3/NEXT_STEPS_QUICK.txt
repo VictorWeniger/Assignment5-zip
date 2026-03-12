@@ -1,0 +1,57 @@
+NEXT STEPS (QUICK)
+==================
+
+1) MongoDB credentials (required for DB connection)
+---------------------------------------------------
+Set these environment variables before starting the app:
+
+export MPE_MONGO_URI="mongodb://USER:PASS@HOST:27017/?authSource=admin"
+export MPE_MONGO_DB="multimodal_parliament_explorer"
+
+Then run:
+./run-app.sh
+
+Note:
+- MongoDB config is read from env vars (not from .credentials file).
+- Source in code:
+  - src/main/java/de/ppr/mpe/config/DatabaseConfig.java:36
+  - src/main/java/de/ppr/mpe/config/DatabaseConfig.java:37
+
+
+2) DUUI credentials/config
+--------------------------
+Option A: Put values into .credentials/mpe.properties
+  (use .credentials/mpe.properties)
+
+Keys:
+  mpe.nlp.engine=duui
+  mpe.duui.endpoint=...
+  mpe.duui.token=...
+  mpe.duui.timeoutSeconds=30
+
+Option B: Use environment variables (env overrides file):
+  MPE_NLP_ENGINE
+  MPE_DUUI_ENDPOINT
+  MPE_DUUI_TOKEN
+  MPE_DUUI_TIMEOUT_SECONDS
+
+Code reference:
+  src/main/java/de/ppr/mpe/config/AppConfig.java:82
+  src/main/java/de/ppr/mpe/config/AppConfig.java:89
+  src/main/java/de/ppr/mpe/config/AppConfig.java:92
+
+
+3) Remaining work checklist
+---------------------------
+[ ] Add real MongoDB credentials and verify startup
+[ ] Add real DUUI endpoint/token
+[ ] Validate full DUUI chain end-to-end with required components
+[ ] Final docs/report/slides proofreading + team attribution check
+[ ] Bonus tasks only if needed (text similarity network + DUUI reader bonus)
+
+
+4) Quick run reminder
+---------------------
+Run through IntelliJ (preferred for your workflow):
+- Maven actions: compile/test/package
+- Application run configuration with main class: de.ppr.mpe.Application

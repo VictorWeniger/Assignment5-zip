@@ -1,0 +1,41 @@
+@startuml
+left to right direction
+actor "User" as U
+actor "Developer" as D
+actor "Ops/Admin" as O
+
+rectangle "Multimodal Parliament Explorer" {
+  usecase "Import Protocol Data" as UC1
+  usecase "Browse Protocols" as UC2
+  usecase "Search Speeches" as UC3
+  usecase "Inspect Speech Detail" as UC4
+  usecase "Analyze with Charts" as UC5
+  usecase "Export TeX/PDF" as UC6
+  usecase "Manage Export Templates" as UC7
+  usecase "Preview Import Candidates" as UC8
+  usecase "Run NLP Batch/Single" as UC9
+  usecase "Import Pre-Annotated NLP" as UC10
+  usecase "Query Topics/Stats" as UC11
+  usecase "Review Media Assets" as UC12
+}
+
+U --> UC2
+U --> UC3
+U --> UC4
+U --> UC5
+U --> UC6
+U --> UC7
+U --> UC8
+U --> UC11
+D --> UC1
+D --> UC7
+D --> UC9
+D --> UC10
+O --> UC1
+O --> UC9
+O --> UC12
+
+UC5 ..> UC11 : <<include>>
+UC6 ..> UC7 : <<extend>>
+UC4 ..> UC12 : <<extend>>
+@enduml

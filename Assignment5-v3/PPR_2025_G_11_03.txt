@@ -1,0 +1,5 @@
+remote_host = ppr.lehre.texttechnologylab.org
+remote_database = PPR_2025_G_11_03
+remote_user = PPR_2025_G_11_03_rw
+remote_password = cuZqBavJ
+remote_port = 27020

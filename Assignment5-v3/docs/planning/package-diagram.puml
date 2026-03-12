@@ -1,0 +1,59 @@
+@startuml
+package "de.ppr.mpe.api" {
+  [ProtocolController]
+  [ExportController]
+  [NlpController]
+  [TemplateController]
+}
+
+package "de.ppr.mpe.service" {
+  [ProtocolImportService]
+  [NlpProcessingService]
+  [NlpAnnotationImportService]
+  [XmlProtocolParser]
+}
+
+package "de.ppr.mpe.service.tex" {
+  [TeXSpeechExporter]
+  [TeXPdfCompiler]
+}
+
+package "de.ppr.mpe.service.nlp" {
+  [NlpEngine]
+  [DuuiNlpEngine]
+  [DuuiComposerNlpEngine]
+  [UimaCasSerializer]
+}
+
+package "de.ppr.mpe.db" {
+  [DatabaseHandler]
+  [MongoDatabaseHandler]
+}
+
+package "de.ppr.mpe.model" {
+  [Speech]
+  [Deputy]
+  [SpeechVideo]
+  [ProtocolDocument]
+  [ProtocolSession]
+  [Comment]
+  [ExportTemplate]
+}
+
+package "de.ppr.mpe.config" {
+  [AppConfig]
+  [DatabaseConfig]
+  [NlpConfig]
+}
+
+"de.ppr.mpe.api" ..> "de.ppr.mpe.service"
+"de.ppr.mpe.api" ..> "de.ppr.mpe.service.tex"
+"de.ppr.mpe.api" ..> "de.ppr.mpe.service.nlp"
+"de.ppr.mpe.api" ..> "de.ppr.mpe.db"
+"de.ppr.mpe.service" ..> "de.ppr.mpe.model"
+"de.ppr.mpe.service" ..> "de.ppr.mpe.service.nlp"
+"de.ppr.mpe.service.tex" ..> "de.ppr.mpe.model"
+"de.ppr.mpe.db" ..> "de.ppr.mpe.model"
+"de.ppr.mpe.api" ..> "de.ppr.mpe.model"
+"de.ppr.mpe" ..> "de.ppr.mpe.config"
+@enduml
